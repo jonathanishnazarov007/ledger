@@ -122,6 +122,27 @@ toggle by the user.
 Within the Firebase Spark (free) tier. A single-user budget app is far below
 the 50k document reads/day allowance.
 
+## API Key Restrictions
+
+The browser key is limited to HTTP referrers:
+
+- `https://jonathanishnazarov007.github.io/*` (the app)
+- `https://ledger-sync-059875785.firebaseapp.com/*` (the auth popup handler)
+- `https://ledger-sync-059875785.web.app/*`
+- `http://localhost/*`, `http://localhost:*/*` (local development)
+
+Firebase's auto-created service allowlist (27 API targets) is preserved
+alongside it.
+
+**Serving the app from any other origin will break sign-in** until that origin
+is added here and to the Auth authorised domains. Both lists must be updated
+together.
+
+This restriction blocks referrer-less traffic (scripts, bots, curl) and so
+reduces casual quota abuse. It is not a security boundary: a `Referer` header
+is trivially forged, and a forged one gets past the key check. It is defence
+against noise, not against an attacker.
+
 ## Risk: Config Key Exposure
 
 `firebaseConfig` values are shipped in client-side `index.html` and are public
