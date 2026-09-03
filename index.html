@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Ledger — personal budget</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<meta name="theme-color" content="#FAFAF8">
+<meta name="color-scheme" content="light">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,500;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FAFAF8;
+    --text-primary:#16181A;
+    --text-secondary:#6B6F72;
+    --text-muted:#9CA0A2;
+    --border:#E6E4DF;
+    --border-strong:#D2D0C9;
+    --accent:#1F3B33;
+    --accent-soft:#EAF0ED;
+    --warn:#B23A2E;
+    --warn-soft:#FBEEEC;
+  }
+  *{box-sizing:border-box;}
+  html,body{background:var(--bg);color-scheme:light;}
+  body{
+    margin:0;
+    color:var(--text-primary);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    font-variant-numeric:tabular-nums;
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:calc(2.75rem + env(safe-area-inset-top)) 1.5rem calc(4rem + env(safe-area-inset-bottom));}
+
+  header.masthead{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    margin-bottom:2.5rem;
+  }
+  header.masthead h1{
+    font-family:'Newsreader',serif;
+    font-style:italic;
+    font-weight:500;
+    font-size:22px;
+    margin:0;
+    color:var(--text-primary);
+  }
+  header.masthead .meta{text-align:right;}
+  header.masthead .date{
+    font-size:12px;
+    color:var(--text-muted);
+  }
+  header.masthead .save-status{
+    font-size:11px;
+    color:var(--text-muted);
+    margin-top:2px;
+  }
+
+  section.hero{margin-bottom:2.75rem;}
+  .hero-label{font-size:13px;color:var(--text-secondary);margin-bottom:6px;}
+  .hero-number{
+    font-size:52px;
+    font-weight:500;
+    letter-spacing:-0.01em;
+    line-height:1.05;
+    color:var(--text-primary);
+  }
+  .hero-number .unit{font-size:18px;font-weight:400;color:var(--text-secondary);margin-left:4px;}
+  .hero-sub{font-size:13px;color:var(--text-muted);margin-top:6px;}
+  .bar-track{
+    height:2px;
+    background:var(--border);
+    margin-top:18px;
+    border-radius:2px;
+    overflow:hidden;
+  }
+  .bar-fill{height:100%;background:var(--accent);}
+  .bar-fill.over{background:var(--warn);}
+
+  .hero-stats{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:1.5rem;
+    margin-top:1.75rem;
+    padding-top:1.5rem;
+    border-top:1px solid var(--border);
+  }
+  .stat-label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:5px;}
+  .stat-value{display:block;font-size:19px;font-weight:500;color:var(--text-primary);}
+  .stat-value .unit{font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:2px;}
+  .stat-sub{display:block;font-size:11px;color:var(--text-muted);margin-top:3px;}
+
+  nav.tabs{
+    display:flex;
+    gap:1.5rem;
+    border-bottom:1px solid var(--border);
+    margin-bottom:2rem;
+    overflow-x:auto;
+  }
+  nav.tabs button{
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    font-weight:500;
+    background:none;
+    border:none;
+    padding:0 0 12px;
+    cursor:pointer;
+    color:var(--text-muted);
+    border-bottom:2px solid transparent;
+    margin-bottom:-1px;
+    white-space:nowrap;
+    transition:color 0.15s ease;
+  }
+  nav.tabs button:hover{color:var(--text-primary);}
+  nav.tabs button.active{
+    color:var(--text-primary);
+    border-bottom-color:var(--accent);
+  }
+
+  section.pane{display:none;}
+  section.pane.active{display:block;animation:fadein 0.15s ease;}
+  @keyframes fadein{from{opacity:0;}to{opacity:1;}}
+
+  h2.section-title{
+    font-size:15px;
+    font-weight:500;
+    margin:0 0 1.25rem;
+    color:var(--text-primary);
+  }
+  .group{margin-bottom:2.75rem;}
+
+  label{
+    display:block;
+    font-size:12px;
+    color:var(--text-secondary);
+    margin-bottom:6px;
+  }
+  input, select{
+    width:100%;
+    font-family:'Inter',sans-serif;
+    font-variant-numeric:tabular-nums;
+    font-size:15px;
+    padding:8px 0;
+    border:none;
+    border-bottom:1px solid var(--border-strong);
+    border-radius:0;
+    background:transparent;
+    color:var(--text-primary);
+    margin-bottom:1.25rem;
+    transition:border-color 0.15s ease;
+  }
+  input::placeholder{color:var(--text-muted);}
+  input:focus, select:focus{
+    outline:none;
+    border-color:var(--accent);
+  }
+  select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%236B6F72'/></svg>");background-repeat:no-repeat;background-position:right 4px center;padding-right:16px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;}
+  .row3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:1.25rem;}
+
+  button.action{
+    font-family:'Inter',sans-serif;
+    font-weight:500;
+    font-size:14px;
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    border-radius:6px;
+    padding:10px 20px;
+    cursor:pointer;
+    transition:opacity 0.15s ease;
+  }
+  button.action:hover{opacity:0.88;}
+  button.action:active{opacity:0.75;}
+
+  button.ghost{
+    background:none;
+    border:none;
+    color:var(--text-muted);
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    padding:0;
+    cursor:pointer;
+    text-decoration:underline;
+    text-decoration-color:transparent;
+    transition:color 0.15s ease, text-decoration-color 0.15s ease;
+  }
+  button.ghost:hover{color:var(--warn);text-decoration-color:var(--warn);}
+
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  th{
+    text-align:left;
+    font-size:12px;
+    color:var(--text-muted);
+    font-weight:500;
+    border-bottom:1px solid var(--border);
+    padding:0 6px 10px 0;
+  }
+  td{
+    padding:13px 6px 13px 0;
+    border-bottom:1px solid var(--border);
+    vertical-align:middle;
+    color:var(--text-primary);
+  }
+  tr:last-child td{border-bottom:none;}
+  td.amt{font-variant-numeric:tabular-nums;text-align:right;}
+  td.actions{text-align:right;width:60px;}
+  .empty{
+    color:var(--text-muted);
+    font-size:13px;
+    padding:1.5rem 0;
+  }
+
+  .verdict{
+    border-left:3px solid var(--accent);
+    padding:2px 0 2px 18px;
+    margin-top:1.5rem;
+  }
+  .verdict.warn{border-left-color:var(--warn);}
+  .verdict .verdict-title{
+    font-size:15px;
+    font-weight:500;
+    margin-bottom:6px;
+    color:var(--text-primary);
+  }
+  .verdict p{margin:4px 0;font-size:13px;color:var(--text-secondary);line-height:1.6;}
+  .verdict .fine{font-size:12px;color:var(--text-muted);margin-top:10px;font-variant-numeric:tabular-nums;}
+
+  .hint{font-size:12px;color:var(--text-muted);margin-top:-0.75rem;margin-bottom:1.25rem;line-height:1.5;}
+
+  .day-row{display:grid;grid-template-columns:56px 1fr 64px;align-items:center;gap:12px;padding:9px 0;}
+  .day-row + .day-row{border-top:1px solid var(--border);}
+  .day-row .day-label{font-size:12px;color:var(--text-secondary);}
+  .day-row .day-label.today{color:var(--accent);font-weight:500;}
+  .day-bar-track{height:2px;background:var(--border);}
+  .day-bar-fill{height:100%;background:var(--accent);}
+  .day-row .day-amt{font-size:12px;text-align:right;color:var(--text-primary);font-variant-numeric:tabular-nums;}
+
+  .insight-row{display:flex;gap:12px;padding:12px 0;align-items:flex-start;}
+  .insight-row + .insight-row{border-top:1px solid var(--border);}
+  .insight-row .dot{width:4px;height:4px;border-radius:50%;background:var(--accent);margin-top:8px;flex-shrink:0;}
+  .insight-row p{margin:0;font-size:13px;color:var(--text-secondary);line-height:1.65;}
+
+  .backup-actions{display:flex;gap:1.5rem;margin-top:0.25rem;}
+  .backup-actions button.ghost{text-decoration:none;color:var(--text-secondary);}
+  .backup-actions button.ghost:hover{color:var(--accent);}
+
+  .chart-empty{color:var(--text-muted);font-size:13px;padding:1rem 0;}
+
+  .trend-svg{width:100%;height:auto;display:block;}
+  .trend-legend{display:flex;gap:1.5rem;margin-top:0.75rem;}
+  .trend-legend .item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);}
+  .trend-legend .swatch{width:10px;height:2px;display:inline-block;}
+  .trend-legend .swatch.dashed{background-image:linear-gradient(to right, var(--text-muted) 50%, transparent 0%);background-size:4px 2px;}
+  .trend-legend .swatch.solid{background:var(--accent);}
+
+  .donut-wrap{display:flex;align-items:center;gap:2rem;}
+  .donut-svg{flex-shrink:0;}
+  .donut-legend{flex:1;}
+  .donut-row{display:flex;align-items:center;gap:10px;padding:7px 0;}
+  .donut-row + .donut-row{border-top:1px solid var(--border);}
+  .donut-row .swatch{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+  .donut-row .name{flex:1;font-size:13px;color:var(--text-primary);}
+  .donut-row .pct{font-size:12px;color:var(--text-muted);width:34px;text-align:right;}
+  .donut-row .val{font-size:13px;color:var(--text-secondary);width:64px;text-align:right;font-variant-numeric:tabular-nums;}
+
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+  .cal-dow{font-size:10px;color:var(--text-muted);text-align:center;padding-bottom:6px;}
+  .cal-cell{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;color:var(--text-secondary);border-radius:6px;position:relative;}
+  .cal-cell.empty{visibility:hidden;}
+  .cal-cell.today{background:var(--accent-soft);color:var(--text-primary);font-weight:500;}
+  .cal-cell .dot{width:4px;height:4px;border-radius:50%;background:var(--accent);margin-top:2px;}
+  .cal-legend{margin-top:1rem;}
+
+  @media (max-width:480px){
+    .hero-number{font-size:42px;}
+    .row2,.row3{grid-template-columns:1fr;gap:0;}
+    .hero-stats{gap:1rem;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <h1>Ledger</h1>
+    <div class="meta">
+      <div class="date" id="today-label"></div>
+      <div class="save-status" id="save-status"></div>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="hero-label">Safe to spend this month</div>
+    <div class="hero-number" id="hl-safe">0<span class="unit">cr</span></div>
+    <div class="hero-sub" id="hl-safe-sub"></div>
+    <div class="bar-track"><div class="bar-fill" id="hl-bar" style="width:0%"></div></div>
+    <div class="hero-stats">
+      <div>
+        <span class="stat-label">Spent so far</span>
+        <span class="stat-value" id="hl-spent">0<span class="unit">cr</span></span>
+        <span class="stat-sub" id="hl-spent-sub"></span>
+      </div>
+      <div>
+        <span class="stat-label">Today</span>
+        <span class="stat-value" id="hl-today">0<span class="unit">cr</span></span>
+        <span class="stat-sub" id="hl-today-sub"></span>
+      </div>
+      <div>
+        <span class="stat-label">Daily pace</span>
+        <span class="stat-value" id="hl-pace">0<span class="unit">cr/day</span></span>
+        <span class="stat-sub" id="hl-pace-sub"></span>
+      </div>
+    </div>
+  </section>
+
+  <nav class="tabs">
+    <button data-pane="afford" class="active">Can I afford it</button>
+    <button data-pane="overview">Overview</button>
+    <button data-pane="bills">Bills</button>
+    <button data-pane="spending">Spending</button>
+    <button data-pane="advisor">Advisor</button>
+  </nav>
+
+  <section class="pane active" id="pane-afford">
+    <div class="group">
+      <h2 class="section-title">Ask before you buy</h2>
+      <div class="row3">
+        <div>
+          <label for="af-name">What is it</label>
+          <input type="text" id="af-name" placeholder="Concert tickets">
+        </div>
+        <div>
+          <label for="af-amount">Amount (cr)</label>
+          <input type="number" id="af-amount" placeholder="120" min="0" step="0.01">
+        </div>
+        <div>
+          <label for="af-cat">Category</label>
+          <select id="af-cat">
+            <option>Fun</option>
+            <option>Food</option>
+            <option>Shopping</option>
+            <option>Travel</option>
+            <option>Home</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
+      <button class="action" id="af-check">Check it</button>
+      <div id="af-result"></div>
+    </div>
+  </section>
+
+  <section class="pane" id="pane-overview">
+    <div class="group">
+      <h2 class="section-title">Monthly picture</h2>
+      <label for="ov-income">Monthly income, after tax (cr)</label>
+      <input type="number" id="ov-income" placeholder="4500" min="0" step="0.01">
+      <label for="ov-buffer">Keep back as buffer / savings (%)</label>
+      <input type="number" id="ov-buffer" placeholder="10" min="0" max="100" step="1">
+      <div class="hint">Held back before anything counts as safe to spend — set to 0 if you don't want one.</div>
+      <button class="action" id="ov-save">Save</button>
+    </div>
+
+    <div class="group">
+      <h2 class="section-title">Spending trend</h2>
+      <div id="trend-chart"></div>
+    </div>
+
+    <div class="group">
+      <h2 class="section-title">Where it's going</h2>
+      <div id="category-donut"></div>
+    </div>
+
+    <div class="group">
+      <h2 class="section-title">Bills this month</h2>
+      <div id="bills-calendar"></div>
+    </div>
+
+    <div class="group">
+      <h2 class="section-title">Breakdown</h2>
+      <table>
+        <tr><th>Income</th><td class="amt" id="ov-t-income">0 cr</td></tr>
+        <tr><th>Bills this month</th><td class="amt" id="ov-t-bills">0 cr</td></tr>
+        <tr><th>Buffer held back</th><td class="amt" id="ov-t-buffer">0 cr</td></tr>
+        <tr><th>Spent so far</th><td class="amt" id="ov-t-spent">0 cr</td></tr>
+        <tr><th>Left to spend</th><td class="amt" id="ov-t-left">0 cr</td></tr>
+      </table>
+    </div>
+
+    <div class="group">
+      <h2 class="section-title">Backup</h2>
+      <div class="hint" style="margin-top:0;">Autosave keeps your data between visits when it's working. Use these as a manual backup if it isn't.</div>
+      <div class="backup-actions">
+        <button class="ghost" id="ov-export">Export backup</button>
+        <button class="ghost" id="ov-import">Import backup</button>
+        <input type="file" id="ov-import-file" accept="application/json" style="display:none;">
+      </div>
+    </div>
+  </section>
+
+  <section class="pane" id="pane-bills">
+    <div class="group">
+      <h2 class="section-title">Add a bill</h2>
+      <div class="row3">
+        <div>
+          <label for="bill-name">Name</label>
+          <input type="text" id="bill-name" placeholder="Rent">
+        </div>
+        <div>
+          <label for="bill-amount">Amount (cr)</label>
+          <input type="number" id="bill-amount" placeholder="1400" min="0" step="0.01">
+        </div>
+        <div>
+          <label for="bill-day">Next charge date</label>
+          <input type="date" id="bill-day">
+        </div>
+      </div>
+      <div class="hint" style="margin-top:-0.75rem;">Pick any upcoming date it's charged — it repeats on that day of the month going forward.</div>
+      <button class="action" id="bill-add">Add bill</button>
+    </div>
+    <div class="group">
+      <h2 class="section-title">Upcoming</h2>
+      <table id="bills-table">
+        <thead><tr><th>Name</th><th>Due</th><th style="text-align:right">Amount</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="empty" id="bills-empty" style="display:none;">No bills yet. Add your rent, subscriptions, and recurring payments above.</div>
+    </div>
+  </section>
+
+  <section class="pane" id="pane-spending">
+    <div class="group">
+      <h2 class="section-title">Log a purchase</h2>
+      <div class="row3">
+        <div>
+          <label for="sp-name">What</label>
+          <input type="text" id="sp-name" placeholder="Groceries">
+        </div>
+        <div>
+          <label for="sp-amount">Amount (cr)</label>
+          <input type="number" id="sp-amount" placeholder="65" min="0" step="0.01">
+        </div>
+        <div>
+          <label for="sp-cat">Category</label>
+          <select id="sp-cat">
+            <option>Food</option>
+            <option>Fun</option>
+            <option>Shopping</option>
+            <option>Travel</option>
+            <option>Home</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
+      <label for="sp-date">Date</label>
+      <input type="date" id="sp-date">
+      <button class="action" id="sp-add">Log it</button>
+    </div>
+
+    <div class="group">
+      <h2 class="section-title">By day</h2>
+      <div id="daily-breakdown"></div>
+    </div>
+
+    <div class="group">
+      <h2 class="section-title">All entries</h2>
+      <table id="spend-table">
+        <thead><tr><th>Date</th><th>What</th><th>Category</th><th style="text-align:right">Amount</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="empty" id="spend-empty" style="display:none;">Nothing logged yet this month.</div>
+    </div>
+  </section>
+
+  <section class="pane" id="pane-advisor">
+    <div class="group">
+      <h2 class="section-title">Your numbers, plain</h2>
+      <div id="advisor-insights"></div>
+    </div>
+
+    <div class="group">
+      <h2 class="section-title">Ask a question</h2>
+      <div class="row2">
+        <input type="text" id="adv-question" placeholder="How much can I spend this week?">
+        <button class="action" id="adv-ask" style="width:fit-content;">Ask</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:0.25rem;">
+        <button class="ghost adv-chip" data-q="How much can I spend today">Today?</button>
+        <button class="ghost adv-chip" data-q="How much can I spend this week">This week?</button>
+        <button class="ghost adv-chip" data-q="Am I on track">On track?</button>
+        <button class="ghost adv-chip" data-q="What is eating my budget">Biggest category?</button>
+      </div>
+      <div id="adv-answer"></div>
+    </div>
+  </section>
+
+</div>
+<script>
+const state = {
+  income: 0,
+  bufferPct: 10,
+  bills: [],
+  spending: [],
+  month: null
+};
+
+function currentMonthKey(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+}
+
+function fmt(n){
+  return Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + ' cr';
+}
+function fmtBig(n){
+  return Number(n||0).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0});
+}
+
+const STORAGE_KEY = 'ledger-state';
+
+function setSaveStatus(text, isProblem){
+  const el = document.getElementById('save-status');
+  if(!el) return;
+  el.textContent = text;
+  el.style.color = isProblem ? 'var(--warn)' : 'var(--text-faint)';
+}
+
+async function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      Object.assign(state, JSON.parse(raw));
+    }
+    setSaveStatus('saved on this device');
+  }catch(e){
+    setSaveStatus('autosave unavailable — use export/import to keep a backup', true);
+  }
+  const mk = currentMonthKey();
+  if(state.month !== mk){
+    state.spending = [];
+    state.month = mk;
+    await saveState();
+  }
+}
+
+async function saveState(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    setSaveStatus('saved on this device');
+  }catch(e){
+    console.error('save failed', e);
+    setSaveStatus('autosave failed — export a backup below', true);
+  }
+}
+
+function downloadBackup(){
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ledger-backup-' + currentMonthKey() + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function importBackup(file){
+  const reader = new FileReader();
+  reader.onload = async ()=>{
+    try{
+      const parsed = JSON.parse(reader.result);
+      Object.assign(state, parsed);
+      await saveState();
+      renderAll();
+    }catch(e){
+      alert('That file could not be read as a backup.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function billsTotal(){
+  return state.bills.reduce((s,b)=>s+Number(b.amount||0),0);
+}
+function spendingTotal(){
+  return state.spending.reduce((s,t)=>s+Number(t.amount||0),0);
+}
+function bufferAmount(){
+  return Number(state.income||0) * (Number(state.bufferPct||0)/100);
+}
+function safeToSpendTotal(){
+  return Math.max(0, Number(state.income||0) - billsTotal() - bufferAmount());
+}
+function safeToSpendRemaining(){
+  return safeToSpendTotal() - spendingTotal();
+}
+function todayKey(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function entryDate(t){
+  return t.date || (state.month + '-01');
+}
+function spentToday(){
+  const tk = todayKey();
+  return state.spending.filter(t=>entryDate(t)===tk).reduce((s,t)=>s+Number(t.amount||0),0);
+}
+function dailyTotals(){
+  const map = {};
+  state.spending.forEach(t=>{
+    const k = entryDate(t);
+    map[k] = (map[k]||0) + Number(t.amount||0);
+  });
+  return map;
+}
+function daysElapsedInMonth(){
+  const now = new Date();
+  return now.getDate();
+}
+function daysInCurrentMonth(){
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+}
+function daysRemainingInMonth(){
+  return Math.max(0, daysInCurrentMonth() - daysElapsedInMonth() + 1);
+}
+function categoryTotals(){
+  const map = {};
+  state.spending.forEach(t=>{
+    map[t.category] = (map[t.category]||0) + Number(t.amount||0);
+  });
+  return map;
+}
+function topCategory(){
+  const totals = categoryTotals();
+  const keys = Object.keys(totals);
+  if(keys.length===0) return null;
+  const top = keys.reduce((a,b)=> totals[a]>=totals[b] ? a : b);
+  return {name: top, amount: totals[top]};
+}
+function perRemainingDayBudget(){
+  const remaining = safeToSpendRemaining();
+  const daysLeft = daysRemainingInMonth();
+  if(daysLeft<=0) return Math.max(0,remaining);
+  return Math.max(0, remaining) / daysLeft;
+}
+function projectedMonthTotal(){
+  const daysElapsed = daysElapsedInMonth();
+  const spent = spendingTotal();
+  const pace = daysElapsed>0 ? spent/daysElapsed : 0;
+  return pace * daysInCurrentMonth();
+}
+
+function buildInsights(){
+  const insights = [];
+  if(!state.income || state.income<=0){
+    insights.push('Set your income in Overview to unlock personalized advice.');
+    return insights;
+  }
+  const total = safeToSpendTotal();
+  const remaining = safeToSpendRemaining();
+  const projected = projectedMonthTotal();
+  const daysLeft = daysRemainingInMonth();
+  const perDay = perRemainingDayBudget();
+
+  if(spendingTotal()>0){
+    if(projected > total){
+      insights.push(`At your current pace, you're on track to spend ${fmt(projected)} this month — about ${fmt(projected-total)} over your ${fmt(total)} budget.`);
+    } else {
+      insights.push(`At your current pace, you're on track to spend ${fmt(projected)} this month, staying under your ${fmt(total)} budget.`);
+    }
+  }
+
+  const top = topCategory();
+  if(top){
+    const pct = spendingTotal()>0 ? Math.round((top.amount/spendingTotal())*100) : 0;
+    insights.push(`${top.name} is your biggest category so far — ${fmt(top.amount)}, about ${pct}% of what you've spent this month.`);
+  }
+
+  if(remaining>0){
+    insights.push(`${daysLeft} day${daysLeft===1?'':'s'} left this month, with ${fmt(remaining)} left to spend — about ${fmt(perDay)}/day if you spread it evenly.`);
+  } else {
+    insights.push(`You've used up this month's safe-to-spend amount, with ${daysLeft} day${daysLeft===1?'':'s'} still to go.`);
+  }
+
+  if(state.bufferPct>0){
+    insights.push(`You're holding back ${fmt(bufferAmount())} (${state.bufferPct}% of income) as buffer before anything counts as spending money.`);
+  }
+
+  const billsShare = state.income>0 ? Math.round((billsTotal()/state.income)*100) : 0;
+  if(billsTotal()>0){
+    insights.push(`Bills take up ${billsShare}% of your income (${fmt(billsTotal())} of ${fmt(state.income)}).`);
+  }
+
+  if(state.bills.length>0){
+    const soonest = state.bills.map(b=>({b, next:nextDueDate(b.day)})).sort((a,c)=>a.next-c.next)[0];
+    insights.push(`Your next bill is ${soonest.b.name} for ${fmt(soonest.b.amount)}, due ${formatDueDate(soonest.next)}.`);
+  }
+
+  return insights;
+}
+
+function renderAdvisor(){
+  const el = document.getElementById('advisor-insights');
+  const insights = buildInsights();
+  el.innerHTML = insights.map(text=>`<div class="insight-row"><div class="dot"></div><p>${escapeHtml(text)}</p></div>`).join('');
+}
+
+function answerQuestion(q){
+  const lower = q.toLowerCase();
+  const remaining = safeToSpendRemaining();
+  const total = safeToSpendTotal();
+  const perDay = perRemainingDayBudget();
+  const daysLeft = daysRemainingInMonth();
+
+  if(!state.income || state.income<=0){
+    return {title:'Set up your income first', body:'Add your monthly income in Overview so the advisor has numbers to work with.'};
+  }
+
+  if(lower.includes('today')){
+    return {title: fmt(Math.min(perDay, Math.max(0,remaining))), body:`That's what's left in today's share of your budget, spreading the remaining ${fmt(Math.max(0,remaining))} evenly across the ${daysLeft} day${daysLeft===1?'':'s'} left this month.`};
+  }
+  if(lower.includes('week')){
+    const weekAmt = Math.min(perDay*7, Math.max(0,remaining));
+    return {title: fmt(weekAmt), body:`Based on ${fmt(perDay)}/day and ${Math.min(7,daysLeft)} day${Math.min(7,daysLeft)===1?'':'s'} of the week left in the month, that's roughly what's safe to spend this week.`};
+  }
+  if(lower.includes('track') || lower.includes('pace') || lower.includes('budget') && lower.includes('on')){
+    const projected = projectedMonthTotal();
+    if(projected>total){
+      return {title:'Running over pace', body:`You're on pace to spend ${fmt(projected)} this month, which is ${fmt(projected-total)} more than your ${fmt(total)} budget.`, warn:true};
+    }
+    return {title:'On track', body:`You're on pace to spend ${fmt(projected)} this month, staying under your ${fmt(total)} budget.`};
+  }
+  if(lower.includes('eating') || lower.includes('biggest') || lower.includes('most')){
+    const top = topCategory();
+    if(!top) return {title:'Nothing logged yet', body:'Log a few purchases and this will show your biggest category.'};
+    const pct = Math.round((top.amount/spendingTotal())*100);
+    return {title: top.name, body:`${top.name} accounts for ${fmt(top.amount)} — about ${pct}% of what you've spent this month.`};
+  }
+  const categoryMatch = ['food','fun','shopping','travel','home','other'].find(c=>lower.includes(c));
+  if(categoryMatch){
+    const totals = categoryTotals();
+    const label = categoryMatch.charAt(0).toUpperCase()+categoryMatch.slice(1);
+    const amt = totals[label] || 0;
+    const pct = spendingTotal()>0 ? Math.round((amt/spendingTotal())*100) : 0;
+    return {title: fmt(amt), body:`That's what you've spent on ${label} this month — about ${pct}% of your total spending.`};
+  }
+  if(lower.includes('left') || lower.includes('remaining') || lower.includes('afford')){
+    return {title: fmt(Math.max(0,remaining)), body:`That's what's left of your ${fmt(total)} safe-to-spend budget for the rest of the month.`};
+  }
+  if(lower.includes('buffer') || lower.includes('saving')){
+    return {title: fmt(bufferAmount()), body:`You're holding back ${state.bufferPct}% of income as buffer this month.`};
+  }
+  return {title:"Not sure how to answer that", body:'Try asking about today, this week, a category (like Food or Fun), or whether you\'re on track — or use the quick questions below.'};
+}
+
+function renderAdvisorAnswer(q){
+  const result = answerQuestion(q);
+  const box = document.getElementById('adv-answer');
+  box.innerHTML = `<div class="verdict ${result.warn?'warn':'info'}">
+    <div class="verdict-title">${escapeHtml(result.title)}</div>
+    <p>${escapeHtml(result.body)}</p>
+  </div>`;
+}
+
+
+function renderHeadline(){
+  const total = safeToSpendTotal();
+  const remaining = safeToSpendRemaining();
+  const spent = spendingTotal();
+  document.getElementById('hl-safe').innerHTML = fmtBig(Math.max(0,remaining)) + '<span class="unit">cr</span>';
+  document.getElementById('hl-safe-sub').textContent = total>0 ? ('of ' + fmtBig(total) + ' cr this month') : 'set your income to begin';
+  document.getElementById('hl-spent').innerHTML = fmtBig(spent) + '<span class="unit">cr</span>';
+  document.getElementById('hl-spent-sub').textContent = state.spending.length + ' item' + (state.spending.length===1?'':'s') + ' logged';
+
+  const today = spentToday();
+  document.getElementById('hl-today').innerHTML = fmtBig(today) + '<span class="unit">cr</span>';
+  const todayCount = state.spending.filter(t=>entryDate(t)===todayKey()).length;
+  document.getElementById('hl-today-sub').textContent = todayCount + ' item' + (todayCount===1?'':'s') + ' today';
+
+  const daysElapsed = daysElapsedInMonth();
+  const pace = daysElapsed>0 ? spent/daysElapsed : 0;
+  document.getElementById('hl-pace').innerHTML = fmtBig(pace) + '<span class="unit">cr/day</span>';
+  const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).getDate();
+  const projected = pace * daysInMonth;
+  document.getElementById('hl-pace-sub').textContent = total>0 ? ('on pace for ' + fmtBig(projected) + ' cr this month') : 'average per day so far';
+
+  const pct = total>0 ? Math.min(100,(spent/total)*100) : 0;
+  const bar = document.getElementById('hl-bar');
+  bar.style.width = pct+'%';
+  bar.className = 'bar-fill' + (remaining<0 ? ' over' : '');
+}
+
+function renderOverview(){
+  document.getElementById('ov-income').value = state.income || '';
+  document.getElementById('ov-buffer').value = state.bufferPct || '';
+  document.getElementById('ov-t-income').textContent = fmt(state.income);
+  document.getElementById('ov-t-bills').textContent = fmt(billsTotal());
+  document.getElementById('ov-t-buffer').textContent = fmt(bufferAmount());
+  document.getElementById('ov-t-spent').textContent = fmt(spendingTotal());
+  document.getElementById('ov-t-left').textContent = fmt(safeToSpendRemaining());
+  renderTrendChart();
+  renderCategoryDonut();
+  renderBillsCalendar();
+}
+
+function renderTrendChart(){
+  const el = document.getElementById('trend-chart');
+  if(!state.income || state.income<=0){
+    el.innerHTML = '<div class="chart-empty">Set your income above to see your spending trend.</div>';
+    return;
+  }
+  const daysInMonth = daysInCurrentMonth();
+  const todayDay = daysElapsedInMonth();
+  const totals = dailyTotals();
+  const cumulative = [];
+  let running = 0;
+  for(let d=1; d<=daysInMonth; d++){
+    const key = state.month + '-' + String(d).padStart(2,'0');
+    running += totals[key] || 0;
+    cumulative.push(running);
+  }
+  const total = safeToSpendTotal();
+  const maxVal = Math.max(total, cumulative[todayDay-1] || 0, 1);
+  const W = 600, H = 160, padT = 10, padB = 20, plotH = H - padT - padB;
+  const xPos = (day)=> daysInMonth>1 ? ((day-1)/(daysInMonth-1))*W : 0;
+  const yPos = (val)=> padT + plotH - (val/maxVal)*plotH;
+
+  const actualPoints = cumulative.slice(0, todayDay).map((v,i)=> `${xPos(i+1).toFixed(1)},${yPos(v).toFixed(1)}`).join(' ');
+  const budgetLine = `${xPos(1).toFixed(1)},${yPos(0).toFixed(1)} ${xPos(daysInMonth).toFixed(1)},${yPos(total).toFixed(1)}`;
+
+  el.innerHTML = `
+    <svg class="trend-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <line x1="0" y1="${(padT+plotH).toFixed(1)}" x2="${W}" y2="${(padT+plotH).toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
+      <polyline points="${budgetLine}" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <polyline points="${actualPoints}" fill="none" stroke="var(--accent)" stroke-width="2"/>
+    </svg>
+    <div class="trend-legend">
+      <div class="item"><span class="swatch solid"></span>Actual spend</div>
+      <div class="item"><span class="swatch dashed"></span>Even pace to budget</div>
+    </div>
+  `;
+}
+
+const CATEGORY_COLORS = {Food:'#1F3B33', Fun:'#3E6B5E', Shopping:'#6C9187', Travel:'#9AB3AC', Home:'#C9D6D1', Other:'#A9A6A0'};
+
+function renderCategoryDonut(){
+  const el = document.getElementById('category-donut');
+  const totals = categoryTotals();
+  const total = spendingTotal();
+  if(total<=0){
+    el.innerHTML = '<div class="chart-empty">Log some spending to see where it\'s going.</div>';
+    return;
+  }
+  const r = 46, cx = 60, cy = 60, circumference = 2*Math.PI*r;
+  let offset = 0;
+  const segments = Object.keys(totals)
+    .filter(c=>totals[c]>0)
+    .sort((a,b)=>totals[b]-totals[a])
+    .map(c=>{
+      const amt = totals[c];
+      const frac = amt/total;
+      const dash = frac*circumference;
+      const color = CATEGORY_COLORS[c] || '#A9A6A0';
+      const seg = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="16" stroke-dasharray="${dash.toFixed(2)} ${(circumference-dash).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+      offset += dash;
+      return {svg:seg, name:c, amt, pct: Math.round(frac*100), color};
+    });
+
+  const svgSegs = segments.map(s=>s.svg).join('');
+  const legendRows = segments.map(s=>`
+    <div class="donut-row">
+      <span class="swatch" style="background:${s.color}"></span>
+      <span class="name">${escapeHtml(s.name)}</span>
+      <span class="pct">${s.pct}%</span>
+      <span class="val">${fmt(s.amt)}</span>
+    </div>`).join('');
+
+  el.innerHTML = `
+    <div class="donut-wrap">
+      <svg class="donut-svg" width="120" height="120" viewBox="0 0 120 120">${svgSegs}</svg>
+      <div class="donut-legend">${legendRows}</div>
+    </div>`;
+}
+
+function renderBillsCalendar(){
+  const el = document.getElementById('bills-calendar');
+  if(state.bills.length===0){
+    el.innerHTML = '<div class="chart-empty">Add bills to see them on the calendar.</div>';
+    return;
+  }
+  const now = new Date();
+  const year = now.getFullYear(), month = now.getMonth();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const todayDate = now.getDate();
+
+  const billsByDay = {};
+  state.bills.forEach(b=>{
+    const d = Math.min(b.day, daysInMonth);
+    if(!billsByDay[d]) billsByDay[d] = [];
+    billsByDay[d].push(b);
+  });
+
+  const dows = ['S','M','T','W','T','F','S'];
+  let cells = dows.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+  for(let i=0;i<firstWeekday;i++){
+    cells += `<div class="cal-cell empty"></div>`;
+  }
+  for(let d=1; d<=daysInMonth; d++){
+    const isToday = d===todayDate;
+    const hasBill = billsByDay[d];
+    cells += `<div class="cal-cell${isToday?' today':''}">${d}${hasBill?'<div class="dot"></div>':''}</div>`;
+  }
+
+  const upcoming = Object.keys(billsByDay).map(Number).sort((a,b)=>a-b)
+    .flatMap(d=>billsByDay[d].map(b=>({day:d,...b})))
+    .map(b=>`<div class="donut-row"><span class="name">${escapeHtml(b.name)}</span><span class="val">${fmt(b.amount)}</span></div>`)
+    .join('');
+
+  el.innerHTML = `<div class="cal-grid">${cells}</div><div class="cal-legend">${upcoming}</div>`;
+}
+
+function startOfToday(){
+  const d = new Date();
+  d.setHours(0,0,0,0);
+  return d;
+}
+function clampDayToMonth(year, month, day){
+  const lastDay = new Date(year, month+1, 0).getDate();
+  return Math.min(day, lastDay);
+}
+function nextDueDate(day){
+  const today = startOfToday();
+  let year = today.getFullYear();
+  let month = today.getMonth();
+  let candidate = new Date(year, month, clampDayToMonth(year, month, day));
+  if(candidate < today){
+    month += 1;
+    if(month > 11){ month = 0; year += 1; }
+    candidate = new Date(year, month, clampDayToMonth(year, month, day));
+  }
+  return candidate;
+}
+function formatDueDate(date){
+  const today = startOfToday();
+  const diffDays = Math.round((date-today)/86400000);
+  const label = date.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+  if(diffDays===0) return label + ' — today';
+  if(diffDays===1) return label + ' — tomorrow';
+  if(diffDays<=6) return label + ` — in ${diffDays}d`;
+  return label;
+}
+
+function renderBills(){
+  const tbody = document.querySelector('#bills-table tbody');
+  tbody.innerHTML = '';
+  document.getElementById('bills-empty').style.display = state.bills.length ? 'none' : 'block';
+  const withIndex = state.bills.map((b,i)=>({b,i,next:nextDueDate(b.day)}));
+  withIndex.sort((a,b)=>a.next-b.next);
+  withIndex.forEach(({b,i,next})=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${escapeHtml(b.name)}</td><td>${formatDueDate(next)}</td><td class="amt">${fmt(b.amount)}</td>
+      <td class="actions"><button class="ghost" data-i="${i}" data-type="bill">Remove</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderSpending(){
+  const tbody = document.querySelector('#spend-table tbody');
+  tbody.innerHTML = '';
+  document.getElementById('spend-empty').style.display = state.spending.length ? 'none' : 'block';
+  const withIndex = state.spending.map((t,i)=>({t,i}));
+  withIndex.sort((a,b)=> entryDate(b.t).localeCompare(entryDate(a.t)));
+  withIndex.forEach(({t,i})=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${formatDateLabel(entryDate(t))}</td><td>${escapeHtml(t.name)}</td><td>${escapeHtml(t.category)}</td><td class="amt">${fmt(t.amount)}</td>
+      <td class="actions"><button class="ghost" data-i="${i}" data-type="spend">Remove</button></td>`;
+    tbody.appendChild(tr);
+  });
+  renderDailyBreakdown();
+}
+
+function formatDateLabel(dateStr){
+  const parts = dateStr.split('-').map(Number);
+  const d = new Date(parts[0], parts[1]-1, parts[2]);
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+}
+
+function renderDailyBreakdown(){
+  const el = document.getElementById('daily-breakdown');
+  const totals = dailyTotals();
+  const days = Object.keys(totals).sort().reverse();
+  if(days.length===0){
+    el.innerHTML = '<div class="empty">No spending logged yet — daily totals will show up here.</div>';
+    return;
+  }
+  const max = Math.max(...days.map(d=>totals[d]));
+  const tk = todayKey();
+  el.innerHTML = days.map(d=>{
+    const pct = max>0 ? Math.round((totals[d]/max)*100) : 0;
+    const isToday = d===tk;
+    return `<div class="day-row">
+      <div class="day-label${isToday?' today':''}">${isToday?'Today':formatDateLabel(d)}</div>
+      <div class="day-bar-track"><div class="day-bar-fill" style="width:${pct}%"></div></div>
+      <div class="day-amt">${fmt(totals[d])}</div>
+    </div>`;
+  }).join('');
+}
+
+function escapeHtml(s){
+  const d = document.createElement('div');
+  d.textContent = s==null?'':String(s);
+  return d.innerHTML;
+}
+
+function renderAll(){
+  renderHeadline();
+  renderOverview();
+  renderBills();
+  renderSpending();
+  renderAdvisor();
+}
+
+document.getElementById('today-label').textContent = new Date().toLocaleDateString(undefined,{month:'long',year:'numeric'});
+document.getElementById('sp-date').value = todayKey();
+
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('section.pane').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('pane-'+btn.dataset.pane).classList.add('active');
+  });
+});
+
+document.getElementById('ov-save').addEventListener('click', async ()=>{
+  const income = parseFloat(document.getElementById('ov-income').value);
+  const buffer = parseFloat(document.getElementById('ov-buffer').value);
+  if(!isNaN(income)) state.income = income;
+  state.bufferPct = isNaN(buffer) ? 0 : buffer;
+  await saveState();
+  renderAll();
+});
+
+document.getElementById('bill-add').addEventListener('click', async ()=>{
+  const name = document.getElementById('bill-name').value.trim();
+  const amount = parseFloat(document.getElementById('bill-amount').value);
+  const dateVal = document.getElementById('bill-day').value;
+  if(!name || isNaN(amount) || !dateVal){
+    alert('Enter a name, an amount, and the next charge date.');
+    return;
+  }
+  const parts = dateVal.split('-').map(Number);
+  const day = parts[2];
+  state.bills.push({name, amount, day});
+  document.getElementById('bill-name').value='';
+  document.getElementById('bill-amount').value='';
+  document.getElementById('bill-day').value='';
+  await saveState();
+  renderAll();
+});
+
+document.getElementById('sp-add').addEventListener('click', async ()=>{
+  const name = document.getElementById('sp-name').value.trim();
+  const amount = parseFloat(document.getElementById('sp-amount').value);
+  const category = document.getElementById('sp-cat').value;
+  const date = document.getElementById('sp-date').value || todayKey();
+  if(!name || isNaN(amount)){
+    alert('Enter what it was and an amount.');
+    return;
+  }
+  state.spending.push({name, amount, category, date});
+  document.getElementById('sp-name').value='';
+  document.getElementById('sp-amount').value='';
+  document.getElementById('sp-date').value = todayKey();
+  await saveState();
+  renderAll();
+});
+
+document.body.addEventListener('click', async (e)=>{
+  if(e.target.matches('button.ghost[data-type]')){
+    const i = parseInt(e.target.dataset.i,10);
+    const type = e.target.dataset.type;
+    if(type==='bill') state.bills.splice(i,1);
+    if(type==='spend') state.spending.splice(i,1);
+    await saveState();
+    renderAll();
+  }
+});
+
+document.getElementById('ov-export').addEventListener('click', downloadBackup);
+document.getElementById('ov-import').addEventListener('click', ()=>{
+  document.getElementById('ov-import-file').click();
+});
+document.getElementById('ov-import-file').addEventListener('change', (e)=>{
+  if(e.target.files && e.target.files[0]){
+    importBackup(e.target.files[0]);
+    e.target.value = '';
+  }
+});
+
+document.getElementById('af-check').addEventListener('click', ()=>{
+  const name = document.getElementById('af-name').value.trim() || 'this purchase';
+  const amount = parseFloat(document.getElementById('af-amount').value);
+  const result = document.getElementById('af-result');
+  if(isNaN(amount) || amount<=0){
+    result.innerHTML = '<div class="verdict warn"><div class="verdict-title">Enter an amount first</div><p>How much does it cost?</p></div>';
+    return;
+  }
+  const remaining = safeToSpendRemaining();
+  const after = remaining - amount;
+  const total = safeToSpendTotal();
+  if(after >= 0){
+    result.innerHTML = `
+      <div class="verdict ok">
+        <div class="verdict-title">Go ahead</div>
+        <p>${escapeHtml(name)} fits inside what's left for this month.</p>
+        <div class="fine">Left before: ${fmt(remaining)} → left after: ${fmt(after)} (of ${fmt(total)} total)</div>
+      </div>`;
+  } else {
+    result.innerHTML = `
+      <div class="verdict warn">
+        <div class="verdict-title">This would put you over</div>
+        <p>${escapeHtml(name)} costs ${fmt(amount)}, but only ${fmt(Math.max(0,remaining))} is left in this month's spending money.</p>
+        <div class="fine">You'd be ${fmt(Math.abs(after))} past your safe-to-spend line.</div>
+      </div>`;
+  }
+});
+
+document.getElementById('adv-ask').addEventListener('click', ()=>{
+  const q = document.getElementById('adv-question').value.trim();
+  if(!q) return;
+  renderAdvisorAnswer(q);
+});
+document.getElementById('adv-question').addEventListener('keydown', (e)=>{
+  if(e.key==='Enter'){
+    const q = e.target.value.trim();
+    if(q) renderAdvisorAnswer(q);
+  }
+});
+document.querySelectorAll('.adv-chip').forEach(chip=>{
+  chip.addEventListener('click', ()=>{
+    document.getElementById('adv-question').value = chip.dataset.q;
+    renderAdvisorAnswer(chip.dataset.q);
+  });
+});
+
+(async function init(){
+  await loadState();
+  renderAll();
+})();
+</script>
+</body>
+</html>
