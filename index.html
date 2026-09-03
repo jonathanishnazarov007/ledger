@@ -72,6 +72,28 @@
   header.masthead .meta{text-align:right;}
   header.masthead .date{font-size:12px;color:var(--text-muted);font-weight:500;}
   header.masthead .save-status{font-size:11px;color:var(--text-muted);margin-top:2px;}
+  header.masthead .save-status .dot{
+    display:inline-block;width:5px;height:5px;border-radius:50%;
+    margin-right:5px;vertical-align:1px;background:var(--text-muted);
+  }
+  header.masthead .save-status.is-synced .dot{background:var(--ok);}
+  header.masthead .save-status.is-offline .dot{background:#E8A33D;}
+  header.masthead .save-status.is-error .dot{background:var(--warn);}
+  header.masthead .account-btn{
+    margin-top:6px;
+    background:var(--accent-soft);
+    border:none;
+    color:var(--accent);
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:11px;
+    padding:5px 11px;
+    border-radius:999px;
+    cursor:pointer;
+    transition:background 0.15s ease;
+  }
+  header.masthead .account-btn:hover{background:#E1E2FC;}
+  header.masthead .account-btn[hidden]{display:none;}
 
   .card{
     background:var(--surface);
@@ -336,6 +358,7 @@
     <div class="meta">
       <div class="date" id="today-label"></div>
       <div class="save-status" id="save-status"></div>
+      <button class="account-btn" id="account-btn" hidden></button>
     </div>
   </header>
 
@@ -604,7 +627,29 @@
   </section>
 
 </div>
-<script>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+import {
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  doc, getDoc, setDoc, onSnapshot, serverTimestamp
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+
+/* Filled in by provisioning. These values are public by design: they identify
+   the project, they do not grant access. Firestore security rules are what
+   actually protect the data. */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCjj9Xn0OrEgAKMWCckdH0qOhaiFB54Mk4",
+  authDomain: "ledger-sync-059875785.firebaseapp.com",
+  projectId: "ledger-sync-059875785",
+  storageBucket: "ledger-sync-059875785.firebasestorage.app",
+  messagingSenderId: "60790633973",
+  appId: "1:60790633973:web:94a7e31466b4019f8b9cbc"
+};
+const syncConfigured = !FIREBASE_CONFIG.apiKey.startsWith('__');
+
 const state = {
   income: 0,
   bufferPct: 10,
@@ -627,39 +672,218 @@ function fmtBig(n){
 
 const STORAGE_KEY = 'ledger-state';
 
-function setSaveStatus(text, isProblem){
+/* ---------------------------------------------------------------
+   Persistence and cross-device sync
+
+   Signed out : localStorage only, exactly as before.
+   Signed in  : Firestore doc users/{uid} is the source of truth,
+                with localStorage kept as a fast local cache.
+   --------------------------------------------------------------- */
+
+const SYNC_FIELDS = ['income','bufferPct','bills','spending','month'];
+
+let auth = null;
+let db = null;
+let currentUser = null;
+let unsubscribeDoc = null;
+let syncState = 'local';   // 'local' | 'synced' | 'offline' | 'error'
+
+function stateSnapshot(){
+  const out = {};
+  for(const k of SYNC_FIELDS) out[k] = state[k];
+  return out;
+}
+
+function applyData(data){
+  if(!data) return;
+  for(const k of SYNC_FIELDS){
+    if(data[k] !== undefined) state[k] = data[k];
+  }
+}
+
+/* Order-stable comparison across local state and a remote document. */
+function fingerprint(obj){
+  return JSON.stringify(SYNC_FIELDS.map(k => (obj && obj[k] !== undefined) ? obj[k] : null));
+}
+
+function hasBudgetData(obj){
+  if(!obj) return false;
+  return Number(obj.income || 0) > 0
+    || (Array.isArray(obj.bills) && obj.bills.length > 0)
+    || (Array.isArray(obj.spending) && obj.spending.length > 0);
+}
+
+/* Spending resets when the calendar month turns over. Returns true if it did. */
+function ensureCurrentMonth(){
+  const mk = currentMonthKey();
+  if(state.month !== mk){
+    state.spending = [];
+    state.month = mk;
+    return true;
+  }
+  return false;
+}
+
+function renderSyncStatus(){
   const el = document.getElementById('save-status');
-  if(!el) return;
-  el.textContent = text;
-  el.style.color = isProblem ? 'var(--warn)' : 'var(--text-faint)';
+  const btn = document.getElementById('account-btn');
+  if(el){
+    el.classList.remove('is-synced','is-offline','is-error');
+    let text;
+    if(!syncConfigured){
+      text = 'saved on this device';
+    } else if(!currentUser){
+      text = 'this device only';
+    } else if(syncState === 'error'){
+      text = 'sync error \u2014 export a backup';
+      el.classList.add('is-error');
+    } else if(syncState === 'offline'){
+      text = 'offline \u2014 will sync';
+      el.classList.add('is-offline');
+    } else {
+      text = 'synced';
+      el.classList.add('is-synced');
+    }
+    el.innerHTML = '<span class="dot"></span>' + escapeHtml(text);
+  }
+  if(btn){
+    btn.hidden = !syncConfigured;
+    btn.textContent = currentUser ? 'Sign out' : 'Sign in to sync';
+  }
 }
 
 async function loadState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    if(raw){
-      Object.assign(state, JSON.parse(raw));
-    }
-    setSaveStatus('saved on this device');
+    if(raw) applyData(JSON.parse(raw));
   }catch(e){
-    setSaveStatus('autosave unavailable — use export/import to keep a backup', true);
+    console.error('local load failed', e);
   }
-  const mk = currentMonthKey();
-  if(state.month !== mk){
-    state.spending = [];
-    state.month = mk;
-    await saveState();
-  }
+  if(ensureCurrentMonth()) await saveState();
+  renderSyncStatus();
 }
 
 async function saveState(){
   try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    setSaveStatus('saved on this device');
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stateSnapshot()));
   }catch(e){
-    console.error('save failed', e);
-    setSaveStatus('autosave failed — export a backup below', true);
+    console.error('local save failed', e);
   }
+  pushToCloud();
+  renderSyncStatus();
+}
+
+/* Deliberately not awaited. Firestore does not resolve a write promise while
+   offline, so awaiting it would freeze the UI on a flaky connection. The write
+   is queued locally by Firestore and flushed on reconnect. */
+function pushToCloud(){
+  if(!db || !currentUser) return;
+  const payload = stateSnapshot();
+  payload.updatedAt = serverTimestamp();
+  setDoc(doc(db, 'users', currentUser.uid), payload, { merge: true })
+    .catch(err => {
+      console.error('cloud save failed', err);
+      syncState = 'error';
+      renderSyncStatus();
+    });
+}
+
+function initSync(){
+  if(!syncConfigured){
+    renderSyncStatus();
+    return;
+  }
+  const app = initializeApp(FIREBASE_CONFIG);
+  auth = getAuth(app);
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  });
+
+  const btn = document.getElementById('account-btn');
+  btn.addEventListener('click', () => {
+    if(currentUser){
+      signOut(auth).catch(err => console.error('sign-out failed', err));
+    } else {
+      signInWithPopup(auth, new GoogleAuthProvider()).catch(err => {
+        if(err.code === 'auth/popup-closed-by-user'
+           || err.code === 'auth/cancelled-popup-request') return;
+        console.error('sign-in failed', err);
+        alert('Sign-in failed: ' + err.message);
+      });
+    }
+  });
+
+  onAuthStateChanged(auth, async (user) => {
+    if(unsubscribeDoc){ unsubscribeDoc(); unsubscribeDoc = null; }
+    currentUser = user;
+    if(user){
+      await startSync(user);
+    } else {
+      syncState = 'local';
+      renderSyncStatus();
+    }
+  });
+
+  renderSyncStatus();
+}
+
+/* Reconcile this device against the cloud, then keep them in step. */
+async function startSync(user){
+  const ref = doc(db, 'users', user.uid);
+  let remote = null;
+  try{
+    const snap = await getDoc(ref);
+    if(snap.exists()) remote = snap.data();
+  }catch(err){
+    console.error('initial fetch failed', err);
+  }
+
+  const localHas  = hasBudgetData(state);
+  const remoteHas = hasBudgetData(remote);
+
+  if(remoteHas && localHas && fingerprint(state) !== fingerprint(remote)){
+    const useCloud = confirm(
+      'This account already has a budget saved in the cloud, and this device '
+      + 'has different data.\n\n'
+      + 'OK  \u2014 use the cloud version (replaces what is on this device)\n'
+      + 'Cancel \u2014 upload this device and overwrite the cloud'
+    );
+    if(useCloud) applyData(remote);
+    else pushToCloud();
+  } else if(remoteHas){
+    applyData(remote);
+  } else if(localHas){
+    pushToCloud();
+  }
+
+  if(ensureCurrentMonth()) await saveState();
+  renderAll();
+  attachListener(ref);
+}
+
+function attachListener(ref){
+  unsubscribeDoc = onSnapshot(
+    ref,
+    { includeMetadataChanges: true },
+    (snap) => {
+      syncState = snap.metadata.fromCache ? 'offline' : 'synced';
+      // hasPendingWrites means this is the echo of our own unacknowledged write
+      if(snap.metadata.hasPendingWrites || !snap.exists()){
+        renderSyncStatus();
+        return;
+      }
+      const before = fingerprint(state);
+      applyData(snap.data());
+      if(ensureCurrentMonth()) saveState();
+      if(fingerprint(state) !== before) renderAll();
+      renderSyncStatus();
+    },
+    (err) => {
+      console.error('sync listener failed', err);
+      syncState = 'error';
+      renderSyncStatus();
+    }
+  );
 }
 
 function downloadBackup(){
@@ -902,8 +1126,11 @@ function renderHeadline(){
 }
 
 function renderOverview(){
-  document.getElementById('ov-income').value = state.income || '';
-  document.getElementById('ov-buffer').value = state.bufferPct || '';
+  // a remote sync can repaint mid-keystroke; leave the focused field alone
+  const incomeEl = document.getElementById('ov-income');
+  const bufferEl = document.getElementById('ov-buffer');
+  if(document.activeElement !== incomeEl) incomeEl.value = state.income || '';
+  if(document.activeElement !== bufferEl) bufferEl.value = state.bufferPct || '';
   document.getElementById('ov-t-income').textContent = fmt(state.income);
   document.getElementById('ov-t-bills').textContent = fmt(billsTotal());
   document.getElementById('ov-t-buffer').textContent = fmt(bufferAmount());
@@ -1259,6 +1486,7 @@ document.querySelectorAll('.adv-chip').forEach(chip=>{
 (async function init(){
   await loadState();
   renderAll();
+  initSync();
 })();
 </script>
 </body>
